@@ -63,4 +63,6 @@ x64\Debug\rag_2.exe search hello
 ***
 ### blog
 
+https://zenn.dev/knaka0209/scraps/6e178d5899790f
+
 
