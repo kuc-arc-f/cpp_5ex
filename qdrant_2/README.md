@@ -31,5 +31,9 @@ x64\Debug\qdrant_2.exe embed
 x64\Debug\qdrant_2.exe search
 ```
 
+***
+### blog
+
+https://zenn.dev/knaka0209/scraps/6b431072656da4
 
 ***
