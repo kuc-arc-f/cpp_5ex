@@ -27,8 +27,6 @@ static size_t WriteCallback(void* contents, size_t size, size_t nmemb, std::stri
 class HttpClient {
 public:
     // コンストラクタ
-    // host: Qdrant サーバーのホスト (例: "localhost")
-    // port: Qdrant サーバーのポート (例: 6333)
     // api_key: API キー (なければ空文字列)
     HttpClient(const std::string& host = "localhost",
                  int port = 6333,
@@ -41,72 +39,6 @@ public:
 
     ~HttpClient() {
         curl_global_cleanup();
-    }
-
-    // --------------------------------------------------------
-    // コレクション作成
-    // collection_name : コレクション名
-    // vector_size     : ベクトル次元数
-    // distance        : "Cosine" | "Euclid" | "Dot"
-    // --------------------------------------------------------
-    bool createCollection(const std::string& collection_name,
-                          size_t vector_size,
-                          const std::string& distance = "Cosine")
-    {
-        json body = {
-            {"vectors", {
-                {"size", vector_size},
-                {"distance", distance}
-            }}
-        };
-
-        std::string url = base_url_ + "/collections/" + collection_name;
-        auto [status, resp] = request("PUT", url, body.dump());
-
-        if (status == 200 || status == 201) {
-            //std::cout << "[OK] コレクション作成: " << collection_name << "\n";
-            std::wcout << L"[OK] コレクション作成: \n";
-            return true;
-        }
-        //std::cerr << "[ERROR] コレクション作成失敗 (HTTP " << status << "): " << resp << "\n";
-        std::wcerr << L"[ERROR] コレクション作成失敗 (HTTP " << status << "): \n";
-        return false;
-    }
-
-    // --------------------------------------------------------
-    // コレクション削除
-    // --------------------------------------------------------
-    bool deleteCollection(const std::string& collection_name) {
-        std::string url = base_url_ + "/collections/" + collection_name;
-        auto [status, resp] = request("DELETE", url, "");
-
-        if (status == 200) {
-            //std::cout << "[OK] コレクション削除: " << collection_name << "\n";
-            //std::wcout << L"[OK] コレクション削除: \n";
-            return true;
-        }
-        //std::cerr << "[ERROR] コレクション削除失敗 (HTTP " << status << "): " << resp << "\n";
-        std::wcerr << "[ERROR] コレクション削除失敗 (HTTP " << status << "): \n";
-        return false;
-    }
-
-    // --------------------------------------------------------
-    // コレクション一覧取得
-    // --------------------------------------------------------
-    std::vector<std::string> listCollections() {
-        std::string url = base_url_ + "/collections";
-        auto [status, resp] = request("GET", url, "");
-
-        std::vector<std::string> names;
-        if (status == 200) {
-            auto j = json::parse(resp);
-            for (auto& col : j["result"]["collections"]) {
-                names.push_back(col["name"].get<std::string>());
-            }
-        } else {
-            std::cerr << "[ERROR] コレクション一覧取得失敗 (HTTP " << status << ")\n";
-        }
-        return names;
     }
 
     // --------------------------------------------------------
@@ -132,33 +64,6 @@ public:
         }
         return ret;
     }
-
-    bool upsertPoints(const std::string& collection_name,
-                      const std::vector<Point>& points)
-    {
-        json body_points = json::array();
-        for (const auto& p : points) {
-            json pt = {
-                {"id", p.id},
-                {"vector", p.vector},
-                {"payload", p.payload}
-            };
-            body_points.push_back(pt);
-        }
-        json body = {{"points", body_points}};
-
-        std::string url = base_url_ + "/collections/" + collection_name + "/points";
-        auto [status, resp] = request("PUT", url, body.dump());
-
-        if (status == 200) {
-            std::wcout << L"[OK] " << points.size() << L" 件のポイントを登録しました\n";
-            return true;
-        }
-        //std::cerr << "[ERROR] ポイント登録失敗 (HTTP " << status << "): " << resp << "\n";
-        std::wcerr << L"[ERROR] ポイント登録失敗 (HTTP " << status << "): \n";
-        return false;
-    }
-
     // --------------------------------------------------------
     // ベクトル検索
     // query_vector : 検索クエリベクトル
@@ -171,117 +76,6 @@ public:
         float score;
         json payload;
     };
-
-    std::vector<SearchResult> search(const std::string& collection_name,
-                                     const std::vector<float>& query_vector,
-                                     size_t top_k = 5,
-                                     std::optional<float> score_threshold = std::nullopt,
-                                     bool with_payload = true)
-    {
-        json body = {
-            {"vector", query_vector},
-            {"limit", top_k},
-            {"with_payload", with_payload}
-        };
-        if (score_threshold.has_value()) {
-            body["score_threshold"] = score_threshold.value();
-        }
-
-        std::string url = base_url_ + "/collections/" + collection_name + "/points/search";
-        auto [status, resp] = request("POST", url, body.dump());
-
-        std::vector<SearchResult> results;
-        if (status == 200) {
-            auto j = json::parse(resp);
-            for (auto& r : j["result"]) {
-                SearchResult sr;
-                sr.id    = r["id"].get<uint64_t>();
-                sr.score = r["score"].get<float>();
-                sr.payload = r.value("payload", json::object());
-                results.push_back(sr);
-            }
-        } else {
-            //std::cerr << "[ERROR] 検索失敗 (HTTP " << status << "): " << resp << "\n";
-            std::wcerr << L"[ERROR] 検索失敗 (HTTP " << status << "): \n";
-        }
-        return results;
-    }
-
-    // --------------------------------------------------------
-    // フィルター付きベクトル検索
-    // filter: Qdrant フィルター JSON (例: must/should/must_not)
-    // --------------------------------------------------------
-    std::vector<SearchResult> searchWithFilter(const std::string& collection_name,
-                                               const std::vector<float>& query_vector,
-                                               const json& filter,
-                                               size_t top_k = 5,
-                                               bool with_payload = true)
-    {
-        json body = {
-            {"vector", query_vector},
-            {"limit", top_k},
-            {"with_payload", with_payload},
-            {"filter", filter}
-        };
-
-        std::string url = base_url_ + "/collections/" + collection_name + "/points/search";
-        auto [status, resp] = request("POST", url, body.dump());
-
-        std::vector<SearchResult> results;
-        if (status == 200) {
-            auto j = json::parse(resp);
-            for (auto& r : j["result"]) {
-                SearchResult sr;
-                sr.id    = r["id"].get<uint64_t>();
-                sr.score = r["score"].get<float>();
-                sr.payload = r.value("payload", json::object());
-                results.push_back(sr);
-            }
-        } else {
-            std::cerr << "[ERROR] フィルター検索失敗 (HTTP " << status << "): " << resp << "\n";
-        }
-        return results;
-    }
-
-    // --------------------------------------------------------
-    // ID指定でポイント取得
-    // --------------------------------------------------------
-    std::optional<Point> getPoint(const std::string& collection_name, uint64_t id) {
-        std::string url = base_url_ + "/collections/" + collection_name
-                        + "/points/" + std::to_string(id);
-        auto [status, resp] = request("GET", url, "");
-
-        if (status == 200) {
-            auto j = json::parse(resp)["result"];
-            Point p;
-            p.id = j["id"].get<uint64_t>();
-            p.payload = j.value("payload", json::object());
-            if (j.contains("vector") && !j["vector"].is_null()) {
-                p.vector = j["vector"].get<std::vector<float>>();
-            }
-            return p;
-        }
-        std::cerr << "[ERROR] ポイント取得失敗 (HTTP " << status << ")\n";
-        return std::nullopt;
-    }
-
-    // --------------------------------------------------------
-    // ポイント削除
-    // --------------------------------------------------------
-    bool deletePoints(const std::string& collection_name,
-                      const std::vector<uint64_t>& ids)
-    {
-        json body = {{"points", ids}};
-        std::string url = base_url_ + "/collections/" + collection_name + "/points/delete";
-        auto [status, resp] = request("POST", url, body.dump());
-
-        if (status == 200) {
-            std::cout << "[OK] " << ids.size() << " 件のポイントを削除しました\n";
-            return true;
-        }
-        std::cerr << "[ERROR] ポイント削除失敗 (HTTP " << status << "): " << resp << "\n";
-        return false;
-    }
 
 private:
     std::string base_url_;
