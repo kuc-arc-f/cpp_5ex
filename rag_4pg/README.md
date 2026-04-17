@@ -61,4 +61,5 @@ x64\Debug\rag_4pg.exe
 ***
 ### blog
 
+https://zenn.dev/knaka0209/scraps/5ffa8e1edc8a05
 
