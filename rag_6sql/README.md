@@ -45,6 +45,9 @@ https://www.sqlite.org/download.html
 ***
 table: ./table.sql
 
+```
+sqlite3 ./example.db < table.sql
+```
 ***
 ### related
 
