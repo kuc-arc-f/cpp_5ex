@@ -34,6 +34,15 @@ C++ windows , RAG Search + SQLite
 ```
 
 ***
+* related
+
+https://www.sqlite.org/download.html
+
+* sqlite-amalgamation-*.zip , download
+* sqlite3.h , sqlite3.c
+
+
+***
 table: ./table.sql
 
 ***
