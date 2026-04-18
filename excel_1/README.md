@@ -25,3 +25,7 @@ https://github.com/jmcnamara/libxlsxwriter
 x64\Debug\excel_1.exe
 ```
 ***
+### blog
+
+https://zenn.dev/knaka0209/scraps/562994d41086c7
+
