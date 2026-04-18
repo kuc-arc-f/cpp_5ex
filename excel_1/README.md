@@ -1,0 +1,27 @@
+﻿# excel_1
+
+ Version: 0.9.1
+
+ date    : 2026/04/15
+
+ update :
+
+***
+
+C++ Windows , excel example
+
+***
+* Visual studio Community 2026 use
+
+***
+### related
+
+https://github.com/jmcnamara/libxlsxwriter
+
+***
+* start
+
+```
+x64\Debug\excel_1.exe
+```
+***
