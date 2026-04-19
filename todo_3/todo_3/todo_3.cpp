@@ -204,16 +204,20 @@ void print_table(const std::vector<Todo>& todos) {
               << "作成日時" << "\n"
               << "  " << std::string(70, '-') << "\n";
     */
+    std::wcout << L"\nTODO-LIST" << std::endl;
+    std::wcout << L"----------------" << std::endl;
+    std::wcout << L"ID , Title ," << std::endl;
+    std::wcout << L"----------------" << std::endl;
 
     for (const auto& t : todos) {
         std::string status = t.done ? "✔" : "○";
         std::string title  = t.title;
         if (title.size() > 37) title = title.substr(0, 34) + "...";
-        std::wcout << L"  "
+        std::wcout << L""
                   //<< std::setw(5)  << t.id
-                  << t.id
+                  << L"ID="  << t.id
                   //<< std::setw(6)  << status
-                  << L", title=" << StringToWString(title)
+                  << L" " << StringToWString(title)
                   << std::endl;
     }
     std::wcout << L"\n";
@@ -263,11 +267,11 @@ int main() {
     }
 
     // ④ 引数を表示
-    std::wcout << L"引数の数: " << argc << L"\n\n";
+    //std::wcout << L"引数の数: " << argc << L"\n\n";
 
     for (int i = 0; i < argc; ++i)
     {
-        std::wcout << L"argv[" << i << L"] = " << argv[i] << L"\n";
+        //std::wcout << L"argv[" << i << L"] = " << argv[i] << L"\n";
     }
 
     //const char* home = std::getenv("HOME");
