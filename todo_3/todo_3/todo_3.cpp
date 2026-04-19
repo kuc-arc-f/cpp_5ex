@@ -1,6 +1,9 @@
 ﻿// todo_3.cpp : このファイルには 'main' 関数が含まれています。プログラム実行の開始と終了がそこで行われます。
 //
-
+#include <windows.h>
+#include <shellapi.h>    // CommandLineToArgvW
+#include <fcntl.h>       // _O_U16TEXT
+#include <io.h>          // _setmode
 #include <iostream>
 #include <string>
 #include <vector>
@@ -9,6 +12,48 @@
 #include <algorithm>
 #include <sqlite3.h>
 
+#pragma comment(lib, "shell32.lib")
+
+
+//
+std::wstring StringToWString(const std::string& str)
+{
+    if (str.empty()) return L"";
+
+    int size_needed = MultiByteToWideChar(
+        CP_UTF8, 0,
+        str.c_str(), (int)str.size(),
+        NULL, 0
+    );
+
+    std::wstring wstr(size_needed, 0);
+
+    MultiByteToWideChar(
+        CP_UTF8, 0,
+        str.c_str(), (int)str.size(),
+        &wstr[0], size_needed
+    );
+
+    return wstr;
+}
+// wstring ↔ string 変換ヘルパー (Windows ANSI 限定)
+static std::string WStrToStr(const std::wstring& ws)
+{
+    if (ws.empty()) return {};
+    int n = ::WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    std::string s(n - 1, '\0');
+    ::WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), -1, s.data(), n, nullptr, nullptr);
+    return s;
+}
+
+// std::wstring を UTF-8 の std::string に変換するヘルパー
+std::string to_utf8(const std::wstring& wstr) {
+    if (wstr.empty()) return std::string();
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
+    std::string strTo(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
+    return strTo;
+}
 // ─────────────────────────────────────────
 //  Data model
 // ─────────────────────────────────────────
@@ -47,7 +92,8 @@ public:
         sqlite3_bind_text(s, 1, title.c_str(), -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(s, 2, now.c_str(),   -1, SQLITE_TRANSIENT);
         step_and_finalize(s);
-        std::cout << "✓ 追加しました: [" << sqlite3_last_insert_rowid(db_) << "] " << title << "\n";
+        //std::cout << "✓ 追加しました: [" << sqlite3_last_insert_rowid(db_) << "] " << title << "\n";
+        std::wcout << L"✓ 追加しました: [" << sqlite3_last_insert_rowid(db_) << L"] " << std::endl;
     }
 
     void done(int id) {
@@ -78,9 +124,11 @@ public:
         sqlite3_bind_int(s, 1, id);
         step_and_finalize(s);
         if (sqlite3_changes(db_) == 0)
-            std::cout << "ID " << id << " が見つかりません。\n";
+            //std::cout << "ID " << id << " が見つかりません。\n";
+            std::wcout << L"ID " << id << " が見つかりません。\n";
         else
-            std::cout << "✓ 削除しました: ID " << id << "\n";
+            //std::cout << "✓ 削除しました: ID " << id << "\n";
+            std::wcout << L"✓ 削除しました: ID " << id << std::endl;
     }
 
     void clear_done() {
@@ -132,15 +180,6 @@ private:
         sqlite3_finalize(s);
     }
 
-    /*
-    static std::string timestamp() {
-        std::time_t t = std::time(nullptr);
-        char buf[20];
-        std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&t));
-        return buf;
-    }
-    */
-
     [[noreturn]] static void die(const std::string& msg) {
         std::cerr << "DB error: " << msg << "\n";
         std::exit(1);
@@ -152,10 +191,11 @@ private:
 // ─────────────────────────────────────────
 void print_table(const std::vector<Todo>& todos) {
     if (todos.empty()) {
-        std::cout << "  (タスクはありません)\n";
+        std::wcout << L"  (タスクはありません)\n";
         return;
     }
     // header
+    /*
     std::cout << "\n"
               << "  " << std::left
               << std::setw(5)  << "ID"
@@ -163,18 +203,20 @@ void print_table(const std::vector<Todo>& todos) {
               << std::setw(40) << "タイトル"
               << "作成日時" << "\n"
               << "  " << std::string(70, '-') << "\n";
+    */
 
     for (const auto& t : todos) {
         std::string status = t.done ? "✔" : "○";
         std::string title  = t.title;
         if (title.size() > 37) title = title.substr(0, 34) + "...";
-        std::cout << "  "
-                  << std::setw(5)  << t.id
-                  << std::setw(6)  << status
-                  << std::setw(40) << title
-                  << t.created_at << "\n";
+        std::wcout << L"  "
+                  //<< std::setw(5)  << t.id
+                  << t.id
+                  //<< std::setw(6)  << status
+                  << L", title=" << StringToWString(title)
+                  << std::endl;
     }
-    std::cout << "\n";
+    std::wcout << L"\n";
 }
 
 void help() {
@@ -201,57 +243,89 @@ std::string DB_PATH = "todo.db";
 // ─────────────────────────────────────────
 //  Entry point
 // ─────────────────────────────────────────
-int main(int argc, char* argv[]) {
+int main() {
+    // ① stdout をワイド文字モードに切り替え
+    _setmode(_fileno(stdout), _O_U16TEXT);
+
+    // ② コンソールの出力コードページを UTF-8 に設定
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+
+    // ③ Windows API でコマンドライン全体を UTF-16 で取得
+    //    GetCommandLineW() はプロセス起動時のコマンドライン文字列を返す
+    int    argc = 0;
+    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+
+    if (argv == nullptr)
+    {
+        std::wcerr << L"CommandLineToArgvW が失敗しました。\n";
+        return 1;
+    }
+
+    // ④ 引数を表示
+    std::wcout << L"引数の数: " << argc << L"\n\n";
+
+    for (int i = 0; i < argc; ++i)
+    {
+        std::wcout << L"argv[" << i << L"] = " << argv[i] << L"\n";
+    }
+
     //const char* home = std::getenv("HOME");
     //std::string db_path = home ? (std::string(home) + "/.todo.db") : "todo.db";
     std::string db_path = DB_PATH;
-    //std::cout << "db_path=" << db_path << " \n";
     DB db(db_path);
 
-    if (argc < 2) { help(); return 0; }
+    //if (argc < 2) { help(); return 0; }
+    if (argc < 2) {
+        std::wcerr << L"error , command none \n"; 
+        return 0; 
+    }
 
-    std::string cmd = argv[1];
+    std::wstring cmd = argv[1];
 
-    std::string cmd_0 = argv[0];
+    std::wstring cmd_0 = argv[0];
     //std::cout << "c0=" << cmd_0 << " \n";
     //std::cout << "c1=" << cmd << " \n";
 
-    if (cmd == "add") {
-        if (argc < 3) { std::cerr << "タイトルを指定してください。\n"; return 1; }
-        // Join remaining args as the title
-        std::string title;
-        for (int i = 2; i < argc; ++i) {
-            if (i > 2) title += ' ';
-            title += argv[i];
+    if (cmd == L"add") {
+        if (argc < 3) {
+          std::wcerr << L"タイトルを指定してください。\n"; 
+          return 1; 
         }
+        // Join remaining args as the title
+        std::wstring input = argv[2];
+        std::string title = to_utf8(input);
         db.add(title);
 
-    } else if (cmd == "list") {
-        std::string filter = (argc >= 3) ? argv[2] : "all";
-        auto todos = db.list(filter);
+    } else if (cmd == L"list") {
+        auto todos = db.list("all");
         print_table(todos);
 
-    } else if (cmd == "done") {
+    } else if (cmd == L"done") {
         if (argc < 3) { std::cerr << "IDを指定してください。\n"; return 1; }
         db.done(std::stoi(argv[2]));
 
-    } else if (cmd == "undone") {
+    } else if (cmd == L"undone") {
         if (argc < 3) { std::cerr << "IDを指定してください。\n"; return 1; }
         db.undone(std::stoi(argv[2]));
 
-    } else if (cmd == "rm") {
-        if (argc < 3) { std::cerr << "IDを指定してください。\n"; return 1; }
+    } else if (cmd == L"rm") {
+        if (argc < 3) { 
+            std::wcerr << L"IDを指定してください。\n"; 
+            return 1; 
+        }
         db.remove(std::stoi(argv[2]));
 
-    } else if (cmd == "clear") {
+    } else if (cmd == L"clear") {
         db.clear_done();
 
-    } else if (cmd == "help" || cmd == "--help" || cmd == "-h") {
-        help();
+//    } else if (cmd == "help" || cmd == "--help" || cmd == "-h") {
+//        help();
 
     } else {
-        std::cerr << "不明なコマンド: " << cmd << "\n";
-        help();
+        //std::wcerr << L"不明なコマンド: " << cmd << std::endl;
+        std::wcerr << L"error , invalid command" << cmd << std::endl;
+        //help();
         return 1;
     }
 
